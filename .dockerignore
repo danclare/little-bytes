@@ -1,0 +1,15 @@
+.git
+.github
+.next
+node_modules
+coverage
+playwright-report
+test-results
+.env
+.env.*
+!.env.example
+**/.terraform
+infra/terraform/*.tfstate*
+infra/terraform/*.tfplan
+var/private-uploads
+*.log

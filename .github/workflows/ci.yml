@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Application validation
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: littlebites
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: littlebites_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U littlebites -d littlebites_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://littlebites:test-only-password@localhost:5432/littlebites_test?schema=public
+      TEST_DATABASE_URL: postgresql://littlebites:test-only-password@localhost:5432/littlebites_test?schema=public
+      AUTH_SECRET: ci-only-auth-secret-with-at-least-32-characters
+      RATE_LIMIT_HMAC_KEY: ci-only-rate-limit-hmac-key-with-32-characters
+      APP_URL: http://127.0.0.1:3000
+      PHOTO_STORAGE: local
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run format:check
+      - run: npm run db:validate
+      - run: npm run db:generate
+      - run: npm run catalog:validate
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run db:migrate
+      - name: Import the deterministic test catalogue
+        run: npm run db:seed
+        env:
+          ALLOW_CATALOG_SEED: "true"
+      - run: npm test
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Report full dependency audit
+        run: npm audit --audit-level=high
+        continue-on-error: true
+      - run: npm run build
+
+  browser-tests:
+    name: Browser and accessibility tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: littlebites
+          POSTGRES_PASSWORD: test-only-password
+          POSTGRES_DB: littlebites_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U littlebites -d littlebites_e2e"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      DATABASE_URL: postgresql://littlebites:test-only-password@localhost:5432/littlebites_e2e?schema=public
+      TEST_DATABASE_URL: postgresql://littlebites:test-only-password@localhost:5432/littlebites_e2e?schema=public
+      AUTH_SECRET: ci-only-auth-secret-with-at-least-32-characters
+      RATE_LIMIT_HMAC_KEY: ci-only-rate-limit-hmac-key-with-32-characters
+      APP_URL: http://127.0.0.1:3000
+      PHOTO_STORAGE: local
+      CI: true
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run db:generate
+      - run: npm run db:migrate
+      - name: Import the deterministic browser-test catalogue
+        run: npm run db:seed
+        env:
+          ALLOW_CATALOG_SEED: "true"
+      - run: npx playwright install --with-deps chromium webkit
+      - run: npm run test:e2e
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@0b7f8abb1508181956e8e162db84b466c27e18ce # v4.6.2
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  infrastructure:
+    name: Terraform validation and configuration scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3.1.2
+        with:
+          terraform_version: 1.14.8
+      - run: terraform fmt -check -recursive infra/terraform
+      - name: Initialize and validate environment
+        working-directory: infra/terraform
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Initialize and validate state bootstrap
+        working-directory: infra/terraform/bootstrap
+        run: |
+          terraform init -backend=false -input=false
+          terraform validate
+      - name: Scan infrastructure configuration
+        uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # v0.34.0
+        with:
+          scan-type: config
+          scan-ref: infra/terraform
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+      - name: Scan repository for secrets
+        uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # v0.34.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: secret
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+
+  container:
+    name: Build and scan containers
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: docker/setup-buildx-action@e468171a9de216ec08956ac3ada2f0791b6bd435 # v3.11.1
+      - name: Build web image
+        run: docker build --target web --tag little-bites:web-ci .
+      - name: Build migration image
+        run: docker build --target migrator --tag little-bites:migrator-ci .
+      - name: Scan web image
+        uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # v0.34.0
+        with:
+          scan-type: image
+          image-ref: little-bites:web-ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          # Fail on any HIGH/CRITICAL finding that has a published fix; unfixed base-OS CVEs are reported only.
+          ignore-unfixed: true
+      - name: Scan migration image
+        uses: aquasecurity/trivy-action@c1824fd6edce30d7ab345a9989de00bbd46ef284 # v0.34.0
+        with:
+          scan-type: image
+          image-ref: little-bites:migrator-ci
+          severity: HIGH,CRITICAL
+          exit-code: "1"
+          # Fail on any HIGH/CRITICAL finding that has a published fix; unfixed base-OS CVEs are reported only.
+          ignore-unfixed: true

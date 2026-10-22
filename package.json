@@ -1,0 +1,62 @@
+{
+  "name": "little-bites",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"prisma/**/*.ts\" \"README.md\" \"docs/**/*.md\" \"infra/**/*.md\" \"*.json\" \"next.config.ts\" \"playwright.config.ts\" \"vitest.config.mts\" \"eslint.config.mjs\" \".prettierrc.json\" \".github/workflows/**/*.{yml,yaml}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,css}\" \"tests/**/*.{ts,tsx}\" \"prisma/**/*.ts\" \"README.md\" \"docs/**/*.md\" \"infra/**/*.md\" \"*.json\" \"next.config.ts\" \"playwright.config.ts\" \"vitest.config.mts\" \"eslint.config.mjs\" \".prettierrc.json\" \".github/workflows/**/*.{yml,yaml}\"",
+    "test": "vitest run",
+    "test:unit": "vitest run tests/unit",
+    "test:integration": "vitest run tests/integration",
+    "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "db:generate": "prisma generate",
+    "db:migrate": "prisma migrate deploy",
+    "catalog:validate": "tsx prisma/seed.ts --validate",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:seed-dev-user": "tsx scripts/seed-dev-user.ts",
+    "db:validate": "prisma validate"
+  },
+  "dependencies": {
+    "@azure/identity": "4.14.0",
+    "@azure/storage-blob": "12.28.0",
+    "@prisma/client": "6.19.3",
+    "argon2": "0.45.1",
+    "jose": "6.1.0",
+    "next": "16.4.2",
+    "nodemailer": "10.2.0",
+    "openid-client": "6.6.4",
+    "prisma": "6.19.3",
+    "react": "19.2.0",
+    "react-dom": "19.2.0",
+    "sharp": "0.35.5",
+    "zod": "4.1.12"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@eslint/eslintrc": "3.3.1",
+    "@playwright/test": "1.56.1",
+    "@types/node": "24.10.0",
+    "@types/nodemailer": "8.0.2",
+    "@types/react": "19.2.2",
+    "@types/react-dom": "19.2.2",
+    "esbuild": "^0.28.2",
+    "eslint": "9.39.1",
+    "eslint-config-next": "16.4.2",
+    "prettier": "3.6.2",
+    "tsx": "4.20.6",
+    "typescript": "5.9.3",
+    "vitest": "4.1.12"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "overrides": {
+    "deepmerge-ts": "8.0.2"
+  }
+}

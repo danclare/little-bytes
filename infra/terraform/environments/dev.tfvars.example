@@ -1,0 +1,20 @@
+resource_group_name            = "rg-little-bites-dev"
+location                        = "uksouth"
+name_prefix                     = "littlebites"
+environment                     = "dev"
+unique_suffix                   = "abc123"
+bootstrap_image                 = "mcr.microsoft.com/k8se/quickstart:latest"
+app_url                         = "https://localhost"
+postgres_admin_username         = "littlebitesadmin"
+postgres_sku_name               = "B_Standard_B1ms"
+deployment_principal_object_id  = "00000000-0000-0000-0000-000000000000"
+postgres_backup_retention_days = 14
+log_retention_days              = 30
+entra_sign_in_enabled           = true
+entra_secret_rotation_days      = 180
+
+tags = {
+  application = "little-bites"
+  environment = "dev"
+  managed_by  = "terraform"
+}

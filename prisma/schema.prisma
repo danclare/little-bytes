@@ -1,0 +1,401 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String               @id @default(uuid()) @db.Uuid
+  email           String               @unique
+  normalizedEmail String               @unique @map("normalized_email")
+  name            String
+  createdAt       DateTime             @default(now()) @map("created_at")
+  updatedAt       DateTime             @updatedAt @map("updated_at")
+  credential      PasswordCredential?
+  accounts        Account[]
+  sessions        Session[]
+  ownedFamilies   Family[]             @relation("FamilyOwner")
+  memberships     FamilyMembership[]
+  resetTokens     PasswordResetToken[]
+  sentInvitations FamilyInvitation[]   @relation("InvitationInviter")
+
+  @@map("users")
+}
+
+model PasswordCredential {
+  userId    String   @id @map("user_id") @db.Uuid
+  password  String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("password_credentials")
+}
+
+model Account {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @map("user_id") @db.Uuid
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  createdAt         DateTime @default(now()) @map("created_at")
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id        String   @id @default(uuid()) @db.Uuid
+  tokenHash String   @unique @map("token_hash")
+  userId    String   @map("user_id") @db.Uuid
+  expiresAt DateTime @map("expires_at")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("sessions")
+}
+
+model PasswordResetToken {
+  id         String    @id @default(uuid()) @db.Uuid
+  tokenHash  String    @unique @map("token_hash")
+  userId     String    @map("user_id") @db.Uuid
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  createdAt  DateTime  @default(now()) @map("created_at")
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("password_reset_tokens")
+}
+
+model Family {
+  id          String             @id @default(uuid()) @db.Uuid
+  name        String
+  ownerUserId String             @map("owner_user_id") @db.Uuid
+  createdAt   DateTime           @default(now()) @map("created_at")
+  updatedAt   DateTime           @updatedAt @map("updated_at")
+  owner       User               @relation("FamilyOwner", fields: [ownerUserId], references: [id], onDelete: Restrict)
+  memberships FamilyMembership[]
+  children    Child[]
+  lists       ShoppingList[]
+  invitations FamilyInvitation[]
+
+  @@index([ownerUserId])
+  @@map("families")
+}
+
+model FamilyMembership {
+  id        String   @id @default(uuid()) @db.Uuid
+  familyId  String   @map("family_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  role      String   @default("owner")
+  createdAt DateTime @default(now()) @map("created_at")
+  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@index([userId])
+  @@map("family_memberships")
+}
+
+model Child {
+  id             String            @id @default(uuid()) @db.Uuid
+  familyId       String            @map("family_id") @db.Uuid
+  name           String
+  dateOfBirth    DateTime          @map("date_of_birth") @db.Date
+  pronouns       String?
+  dietaryNotes   String?           @map("dietary_notes")
+  readiness      Boolean           @default(false)
+  photoObjectKey String?           @map("photo_object_key")
+  photoUpdatedAt DateTime?         @map("photo_updated_at")
+  createdAt      DateTime          @default(now()) @map("created_at")
+  updatedAt      DateTime          @updatedAt @map("updated_at")
+  family         Family            @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  statuses       ChildFoodStatus[]
+  diaryEntries   FoodDiaryEntry[]
+  preferences    ChildPreference[]
+  mealPlans      MealPlan[]
+  shoppingLists  ShoppingList[]
+
+  @@index([familyId])
+  @@map("children")
+}
+
+model ChildPreference {
+  id        String   @id @default(uuid()) @db.Uuid
+  childId   String   @map("child_id") @db.Uuid
+  kind      String
+  value     String
+  createdAt DateTime @default(now()) @map("created_at")
+  child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, kind, value])
+  @@index([childId, kind])
+  @@map("child_preferences")
+}
+
+model Ingredient {
+  id                String             @id @default(uuid()) @db.Uuid
+  slug              String             @unique
+  name              String
+  category          String
+  supportedUnits    String[]           @map("supported_units")
+  allergens         String[]           @default([])
+  createdAt         DateTime           @default(now()) @map("created_at")
+  updatedAt         DateTime           @updatedAt @map("updated_at")
+  foods             Food[]
+  recipeIngredients RecipeIngredient[]
+  shoppingItems     ShoppingListItem[]
+
+  @@index([category])
+  @@map("ingredients")
+}
+
+model Food {
+  id                String            @id @default(uuid()) @db.Uuid
+  slug              String            @unique
+  name              String
+  description       String
+  category          String
+  ageGuidance       String            @map("age_guidance")
+  allergens         String[]          @default([])
+  imageKey          String?           @map("image_key")
+  preparationGuides Json              @map("preparation_guides")
+  hazards           String[]          @default([])
+  active            Boolean           @default(true)
+  ingredientId      String?           @map("ingredient_id") @db.Uuid
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
+  ingredient        Ingredient?       @relation(fields: [ingredientId], references: [id], onDelete: SetNull)
+  statuses          ChildFoodStatus[]
+  diaryEntries      FoodDiaryEntry[]
+  plannedMeals      PlannedMeal[]
+
+  @@index([category, active])
+  @@index([name])
+  @@map("foods")
+}
+
+model ChildFoodStatus {
+  id        String   @id @default(uuid()) @db.Uuid
+  childId   String   @map("child_id") @db.Uuid
+  foodId    String   @map("food_id") @db.Uuid
+  status    String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  child     Child    @relation(fields: [childId], references: [id], onDelete: Cascade)
+  food      Food     @relation(fields: [foodId], references: [id], onDelete: Cascade)
+
+  @@unique([childId, foodId])
+  @@index([childId, status])
+  @@map("child_food_statuses")
+}
+
+model FoodDiaryEntry {
+  id            String       @id @default(uuid()) @db.Uuid
+  childId       String       @map("child_id") @db.Uuid
+  foodId        String       @map("food_id") @db.Uuid
+  eatenAt       DateTime     @map("eaten_at")
+  preparation   String
+  texture       String
+  amount        String?
+  reaction      String?
+  notes         String?
+  recipeId      String?      @map("recipe_id") @db.Uuid
+  plannedMealId String?      @map("planned_meal_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at")
+  child         Child        @relation(fields: [childId], references: [id], onDelete: Cascade)
+  food          Food         @relation(fields: [foodId], references: [id], onDelete: Restrict)
+  recipe        Recipe?      @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  plannedMeal   PlannedMeal? @relation(fields: [plannedMealId], references: [id], onDelete: SetNull)
+
+  @@index([childId, eatenAt])
+  @@index([foodId])
+  @@index([plannedMealId])
+  @@index([recipeId])
+  @@map("food_diary_entries")
+}
+
+model Recipe {
+  id                  String                   @id @default(uuid()) @db.Uuid
+  slug                String                   @unique
+  title               String
+  description         String
+  mealType            String                   @map("meal_type")
+  suitableAgeMonths   Int                      @map("suitable_age_months")
+  allergens           String[]                 @default([])
+  servings            Int
+  preparationMinutes  Int                      @map("preparation_minutes")
+  cookingMinutes      Int                      @map("cooking_minutes")
+  instructions        String[]
+  imageKey            String?                  @map("image_key")
+  source              String
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  ingredients         RecipeIngredient[]
+  plannedMeals        PlannedMeal[]
+  shoppingItems       ShoppingListItem[]
+  shoppingItemSources ShoppingListItemSource[]
+  templateMeals       TemplateMeal[]
+  diaryEntries        FoodDiaryEntry[]
+
+  @@index([mealType, suitableAgeMonths])
+  @@index([title])
+  @@map("recipes")
+}
+
+model RecipeIngredient {
+  id              String     @id @default(uuid()) @db.Uuid
+  recipeId        String     @map("recipe_id") @db.Uuid
+  ingredientId    String     @map("ingredient_id") @db.Uuid
+  quantity        Decimal    @db.Decimal(10, 3)
+  unit            String
+  preparationNote String?    @map("preparation_note")
+  recipe          Recipe     @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+  ingredient      Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@unique([recipeId, ingredientId, unit])
+  @@index([ingredientId])
+  @@map("recipe_ingredients")
+}
+
+model MealPlanTemplate {
+  id          String         @id @default(uuid()) @db.Uuid
+  slug        String         @unique
+  name        String
+  description String
+  createdAt   DateTime       @default(now()) @map("created_at")
+  meals       TemplateMeal[]
+
+  @@map("meal_plan_templates")
+}
+
+model TemplateMeal {
+  id         String           @id @default(uuid()) @db.Uuid
+  templateId String           @map("template_id") @db.Uuid
+  recipeId   String           @map("recipe_id") @db.Uuid
+  dayOffset  Int              @map("day_offset")
+  mealType   String           @map("meal_type")
+  template   MealPlanTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  recipe     Recipe           @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+
+  @@unique([templateId, dayOffset, mealType])
+  @@index([recipeId])
+  @@map("template_meals")
+}
+
+model MealPlan {
+  id        String        @id @default(uuid()) @db.Uuid
+  childId   String        @map("child_id") @db.Uuid
+  weekStart DateTime      @map("week_start") @db.Date
+  status    String        @default("approved")
+  createdAt DateTime      @default(now()) @map("created_at")
+  updatedAt DateTime      @updatedAt @map("updated_at")
+  child     Child         @relation(fields: [childId], references: [id], onDelete: Cascade)
+  meals     PlannedMeal[]
+
+  @@unique([childId, weekStart])
+  @@index([childId, weekStart])
+  @@map("meal_plans")
+}
+
+model PlannedMeal {
+  id           String           @id @default(uuid()) @db.Uuid
+  mealPlanId   String           @map("meal_plan_id") @db.Uuid
+  date         DateTime         @db.Date
+  mealType     String           @map("meal_type")
+  recipeId     String?          @map("recipe_id") @db.Uuid
+  foodId       String?          @map("food_id") @db.Uuid
+  servings     Int              @default(1)
+  notes        String?
+  plan         MealPlan         @relation(fields: [mealPlanId], references: [id], onDelete: Cascade)
+  recipe       Recipe?          @relation(fields: [recipeId], references: [id], onDelete: Restrict)
+  food         Food?            @relation(fields: [foodId], references: [id], onDelete: Restrict)
+  diaryEntries FoodDiaryEntry[]
+
+  @@index([mealPlanId, date, mealType])
+  @@index([recipeId])
+  @@index([foodId])
+  @@map("planned_meals")
+}
+
+model ShoppingList {
+  id        String             @id @default(uuid()) @db.Uuid
+  familyId  String             @map("family_id") @db.Uuid
+  childId   String?            @map("child_id") @db.Uuid
+  name      String
+  status    String             @default("active")
+  createdAt DateTime           @default(now()) @map("created_at")
+  updatedAt DateTime           @updatedAt @map("updated_at")
+  family    Family             @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  child     Child?             @relation(fields: [childId], references: [id], onDelete: SetNull)
+  items     ShoppingListItem[]
+
+  @@index([familyId, status])
+  @@map("shopping_lists")
+}
+
+model ShoppingListItem {
+  id             String                   @id @default(uuid()) @db.Uuid
+  shoppingListId String                   @map("shopping_list_id") @db.Uuid
+  ingredientId   String?                  @map("ingredient_id") @db.Uuid
+  recipeId       String?                  @map("recipe_id") @db.Uuid
+  label          String
+  quantity       Decimal?                 @db.Decimal(10, 3)
+  unit           String?
+  category       String?
+  checked        Boolean                  @default(false)
+  createdAt      DateTime                 @default(now()) @map("created_at")
+  list           ShoppingList             @relation(fields: [shoppingListId], references: [id], onDelete: Cascade)
+  ingredient     Ingredient?              @relation(fields: [ingredientId], references: [id], onDelete: SetNull)
+  recipe         Recipe?                  @relation(fields: [recipeId], references: [id], onDelete: SetNull)
+  sources        ShoppingListItemSource[]
+
+  @@index([shoppingListId, checked])
+  @@index([ingredientId])
+  @@map("shopping_list_items")
+}
+
+model ShoppingListItemSource {
+  id       String           @id @default(uuid()) @db.Uuid
+  itemId   String           @map("item_id") @db.Uuid
+  recipeId String           @map("recipe_id") @db.Uuid
+  item     ShoppingListItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  recipe   Recipe           @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@unique([itemId, recipeId])
+  @@index([recipeId])
+  @@map("shopping_list_item_sources")
+}
+
+model RateLimitAttempt {
+  id        String   @id @default(uuid()) @db.Uuid
+  keyHash   String   @map("key_hash")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([keyHash, createdAt])
+  @@map("rate_limit_attempts")
+}
+
+model FamilyInvitation {
+  id              String    @id @default(uuid()) @db.Uuid
+  familyId        String    @map("family_id") @db.Uuid
+  invitedByUserId String    @map("invited_by_user_id") @db.Uuid
+  email           String
+  normalizedEmail String    @map("normalized_email")
+  role            String
+  tokenHash       String    @unique @map("token_hash")
+  expiresAt       DateTime  @map("expires_at")
+  acceptedAt      DateTime? @map("accepted_at")
+  revokedAt       DateTime? @map("revoked_at")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  family          Family    @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  invitedBy       User      @relation("InvitationInviter", fields: [invitedByUserId], references: [id], onDelete: Cascade)
+
+  @@index([familyId, acceptedAt, revokedAt])
+  @@index([normalizedEmail])
+  @@map("family_invitations")
+}
