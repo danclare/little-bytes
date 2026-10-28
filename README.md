@@ -61,8 +61,60 @@ npm run dev
 Set `DATABASE_URL`, `AUTH_SECRET` and `RATE_LIMIT_HMAC_KEY` in `.env` before
 starting the app. Use cryptographically random values of at least 32
 characters for the two secrets. The catalogue seed is idempotent. Production
-imports are performed only by the migrator container after schema migration;
-the container opts in to `ALLOW_CATALOG_SEED=true` for that one-off operation.
+imports require `ALLOW_CATALOG_SEED=true` after schema migration; the Azure
+migrator container sets this for its one-off operation.
+
+## Render Free deployment
+
+Use a Node.js web service with Node.js 22 and a separate Render PostgreSQL
+database in the same region. Configure these web-service environment variables:
+
+- `NODE_ENV=production`
+- `DATABASE_URL`: the database's Internal Database URL; preserve its connection
+  parameters and configure TLS as required by the database provider.
+- `APP_URL`: the web service's public HTTPS URL.
+- `AUTH_SECRET` and `RATE_LIMIT_HMAC_KEY`: separate cryptographically random
+  secrets of at least 32 characters each.
+- `PHOTO_STORAGE=disabled`
+- `EMAIL_DELIVERY=disabled` unless SMTP is configured.
+
+Never commit real environment values. Build command:
+
+```sh
+npm ci --include=dev && npm run build
+```
+
+Free services do not support pre-deploy commands. Apply migrations and seed the
+catalogue before starting the application with this start command:
+
+```sh
+npm run db:migrate && ALLOW_CATALOG_SEED=true npm run db:seed && npm run start -- --hostname 0.0.0.0 --port "$PORT"
+```
+
+The seed is idempotent and creates catalogue content, not development accounts.
+If migration or seeding fails, the application will not start. Use
+`/api/health` as the health-check path.
+
+Production defaults to disabled photo storage when `PHOTO_STORAGE` is unset.
+Disabled mode hides upload/removal controls, uses initials instead of existing
+photos and rejects direct photo requests without accessing image storage.
+Existing image objects are not deleted when storage is disabled, including when
+a child profile is deleted; an operator must remove these from the previous
+storage provider. Azure photo storage remains available with its existing
+private-storage configuration and credentials.
+
+Do not use the free web service's ephemeral filesystem for photos or PostgreSQL.
+Render's free PostgreSQL database expires after 30 days and has no backups;
+export any data you need to keep before expiry. This configuration is for a
+short-lived trial, not durable production hosting. See
+[Render free-instance limits](https://render.com/docs/free).
+
+If registration returns a generic error, inspect the server logs.
+`Invalid server configuration` lists failing field names and validation codes,
+never their values. `Registration failed` identifies the failed step, such as
+`rate-limit`, `password-hashing`, `account-create` or `session-create`, without
+logging submitted account details. Do not share environment dumps; rotate any
+credentials that have been exposed.
 
 ## Verification
 
@@ -97,8 +149,8 @@ database. Playwright requires Chromium and WebKit browser installations.
   editor or viewer), change roles and remove members from the Profile tab.
 - Apple sign-in is hidden unless all OIDC settings are present. Real Apple
   credentials and a callback-domain test are still required before enabling it.
-- Local photo storage is for development only. Production configuration
-  requires private Azure Blob storage and managed identity.
+- Local photo storage is for development only. Production photo storage is
+  disabled by default; enable private Azure Blob storage explicitly to use photos.
 - The Azure and GitHub deployment setup is documented but has not been
   provisioned or run in this environment.
 

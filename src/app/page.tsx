@@ -920,8 +920,8 @@ function OnboardingChild({
     <>
       <h1>Set up your little one.</h1>
       <p>
-        Age and readiness help make food guidance more relevant. A profile photo is optional and can
-        be added later.
+        Age and readiness help make food guidance more relevant. You only need their name or
+        nickname and date of birth to get started.
       </p>
       <Messages error={error} message={message} />
       <form className="form" onSubmit={onSubmit}>
@@ -1969,7 +1969,7 @@ function ChildSettings({
             <div>
               <h2 id="child-details-title">{child.name}</h2>
               <p className="muted">{ageText(child.dateOfBirth)}</p>
-              {canEdit && (
+              {canEdit && session.photosEnabled && (
                 <div className="actions">
                   <label className="button button-secondary button-small" htmlFor="profile-photo">
                     {child.hasPhoto ? "Replace photo" : "Choose optional photo"}
@@ -1993,9 +1993,12 @@ function ChildSettings({
                   )}
                 </div>
               )}
+              {!session.photosEnabled && (
+                <p className="muted">Profile photos are unavailable on this deployment.</p>
+              )}
             </div>
           </div>
-          {preview && (
+          {session.photosEnabled && preview && (
             <div className="card card-soft photo-crop">
               <p>Preview crop and position before saving. JPEG, PNG or WebP up to 8 MB.</p>
               <div className="field">

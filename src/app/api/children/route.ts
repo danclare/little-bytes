@@ -5,6 +5,7 @@ import { assertSameOrigin, jsonError, readJson } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { childInputSchema } from "@/lib/validation";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { photosEnabled } from "@/lib/env";
 
 export async function GET() {
   try {
@@ -27,7 +28,7 @@ export async function GET() {
     return NextResponse.json(
       children.map(({ photoObjectKey, ...child }) => ({
         ...child,
-        hasPhoto: Boolean(photoObjectKey),
+        hasPhoto: photosEnabled() && Boolean(photoObjectKey),
       })),
     );
   } catch (error) {

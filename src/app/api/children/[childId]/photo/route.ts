@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { deletePhoto, getPhoto, processProfilePhoto, storePhoto } from "@/lib/photos";
+import {
+  deletePhoto,
+  getPhoto,
+  processProfilePhoto,
+  requirePhotoStorage,
+  storePhoto,
+} from "@/lib/photos";
 import { requireChild } from "@/lib/access";
 import { requireUser } from "@/lib/auth";
 import { assertSameOrigin, HttpError, jsonError } from "@/lib/http";
@@ -13,6 +19,7 @@ export async function GET(_request: Request, context: Context) {
     const user = await requireUser();
     const { childId } = await context.params;
     const child = await requireChild(user.id, childId);
+    requirePhotoStorage();
     if (!child.photoObjectKey) throw new HttpError(404, "No profile photo has been added.");
     const image = await getPhoto(child.photoObjectKey);
     return new NextResponse(new Uint8Array(image), {
@@ -31,9 +38,10 @@ export async function POST(request: Request, context: Context) {
   try {
     assertSameOrigin(request);
     const user = await requireUser();
-    await enforceRateLimit(request, "photo-upload", 5);
     const { childId } = await context.params;
     const child = await requireChild(user.id, childId, "write");
+    requirePhotoStorage();
+    await enforceRateLimit(request, "photo-upload", 5);
     const rawContentLength = request.headers.get("content-length");
     if (!rawContentLength) throw new HttpError(411, "A file size is required for upload.");
     const contentLength = Number(rawContentLength);
@@ -70,6 +78,7 @@ export async function DELETE(request: Request, context: Context) {
     const user = await requireUser();
     const { childId } = await context.params;
     const child = await requireChild(user.id, childId, "write");
+    requirePhotoStorage();
     if (child.photoObjectKey) {
       await deletePhoto(child.photoObjectKey);
       await prisma.child.update({

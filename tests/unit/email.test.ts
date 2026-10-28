@@ -69,6 +69,6 @@ describe("password reset email delivery", () => {
         "parent@example.test",
         "reset-token-with-at-least-32-characters",
       ),
-    ).rejects.toThrow("SMTP host, username, password and a valid sender address are required.");
+    ).rejects.toThrow("EMAIL_DELIVERY (custom)");
   });
 });

@@ -5,6 +5,7 @@ import { assertSameOrigin, HttpError, jsonError, readJson } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { nameSchema } from "@/lib/validation";
 import { z } from "zod";
+import { photosEnabled } from "@/lib/env";
 
 export async function GET() {
   try {
@@ -28,7 +29,7 @@ export async function GET() {
       ...family,
       children: children.map(({ photoObjectKey, ...child }) => ({
         ...child,
-        hasPhoto: Boolean(photoObjectKey),
+        hasPhoto: photosEnabled() && Boolean(photoObjectKey),
       })),
     });
   } catch (error) {

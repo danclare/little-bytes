@@ -5,11 +5,17 @@ import path from "node:path";
 import sharp, { type Sharp } from "sharp";
 import { DefaultAzureCredential } from "@azure/identity";
 import { BlobServiceClient } from "@azure/storage-blob";
-import { getEnv } from "@/lib/env";
+import { getEnv, photosEnabled } from "@/lib/env";
 import { HttpError } from "@/lib/http";
 
 const MAX_UPLOAD_BYTES = 8 * 1024 * 1024;
 const MAX_DIMENSION = 8_000;
+
+export function requirePhotoStorage(): void {
+  if (!photosEnabled()) {
+    throw new HttpError(503, "Profile photos are disabled on this deployment.");
+  }
+}
 
 function azureContainer() {
   const env = getEnv();
@@ -69,6 +75,7 @@ export async function processProfilePhoto(file: File, position: string): Promise
 }
 
 export async function storePhoto(bytes: Buffer): Promise<string> {
+  requirePhotoStorage();
   const key = `${randomUUID()}.jpg`;
   if (getEnv().PHOTO_STORAGE === "azure") {
     await azureContainer()
@@ -84,6 +91,7 @@ export async function storePhoto(bytes: Buffer): Promise<string> {
 }
 
 export async function getPhoto(key: string): Promise<Buffer> {
+  requirePhotoStorage();
   try {
     if (getEnv().PHOTO_STORAGE === "azure")
       return await azureContainer().getBlockBlobClient(key).downloadToBuffer();
@@ -106,6 +114,7 @@ export async function getPhoto(key: string): Promise<Buffer> {
 }
 
 export async function deletePhoto(key: string): Promise<void> {
+  requirePhotoStorage();
   if (getEnv().PHOTO_STORAGE === "azure") {
     await azureContainer().getBlockBlobClient(key).deleteIfExists();
   } else {

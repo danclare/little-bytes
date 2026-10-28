@@ -5,6 +5,7 @@ import { requireUser } from "@/lib/auth";
 import { assertSameOrigin, HttpError, jsonError, readJson } from "@/lib/http";
 import { prisma } from "@/lib/prisma";
 import { childInputSchema } from "@/lib/validation";
+import { photosEnabled } from "@/lib/env";
 
 type Context = { params: Promise<{ childId: string }> };
 
@@ -14,7 +15,7 @@ export async function GET(_request: Request, context: Context) {
     const { childId } = await context.params;
     const child = await requireChild(user.id, childId);
     const { photoObjectKey, ...profile } = child;
-    return NextResponse.json({ ...profile, hasPhoto: Boolean(photoObjectKey) });
+    return NextResponse.json({ ...profile, hasPhoto: photosEnabled() && Boolean(photoObjectKey) });
   } catch (error) {
     return jsonError(error);
   }
@@ -42,7 +43,7 @@ export async function PATCH(request: Request, context: Context) {
       },
     });
     const { photoObjectKey, ...profile } = child;
-    return NextResponse.json({ ...profile, hasPhoto: Boolean(photoObjectKey) });
+    return NextResponse.json({ ...profile, hasPhoto: photosEnabled() && Boolean(photoObjectKey) });
   } catch (error) {
     return jsonError(error);
   }
@@ -55,7 +56,7 @@ export async function DELETE(request: Request, context: Context) {
     const { childId } = await context.params;
     const child = await requireChild(user.id, childId, "manage");
     await prisma.child.delete({ where: { id: child.id, familyId: child.familyId } });
-    if (child.photoObjectKey) await deletePhoto(child.photoObjectKey);
+    if (child.photoObjectKey && photosEnabled()) await deletePhoto(child.photoObjectKey);
     return NextResponse.json({ ok: true });
   } catch (error) {
     return jsonError(error);

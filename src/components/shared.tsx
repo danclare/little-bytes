@@ -95,6 +95,7 @@ export type AppSession = {
   family: Family | null;
   appleSignInConfigured: boolean;
   entraSignInConfigured: boolean;
+  photosEnabled: boolean;
 };
 export type Page = "today" | "foods" | "diary" | "recipes" | "planner" | "shopping" | "profile";
 

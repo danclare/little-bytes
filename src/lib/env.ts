@@ -8,7 +8,9 @@ const environment = z
     DATABASE_URL: z.string().min(1),
     RATE_LIMIT_HMAC_KEY: z.string().min(32),
     RESET_TOKEN_TTL_MINUTES: z.coerce.number().int().min(5).max(120).default(30),
-    PHOTO_STORAGE: z.enum(["local", "azure"]).default("local"),
+    PHOTO_STORAGE: z
+      .enum(["disabled", "local", "azure"])
+      .default(() => (process.env.NODE_ENV === "production" ? "disabled" : "local")),
     PHOTO_LOCAL_DIRECTORY: z.string().default("./var/private-uploads"),
     AZURE_STORAGE_ACCOUNT_URL: z.string().url().optional().or(z.literal("")),
     AZURE_STORAGE_CONTAINER: z.string().min(3).default("child-photos"),
@@ -37,11 +39,11 @@ const environment = z
     EMAIL_FROM: z.string().email().optional().or(z.literal("")),
   })
   .superRefine((value, context) => {
-    if (value.NODE_ENV === "production" && value.PHOTO_STORAGE !== "azure") {
+    if (value.NODE_ENV === "production" && value.PHOTO_STORAGE === "local") {
       context.addIssue({
         code: "custom",
         path: ["PHOTO_STORAGE"],
-        message: "Private Azure Blob photo storage is required in production.",
+        message: "Use disabled or private Azure Blob photo storage in production.",
       });
     }
     if (
@@ -67,7 +69,14 @@ export function getEnv(): AppEnvironment {
   if (cached) return cached;
   const result = environment.safeParse(process.env);
   if (!result.success) {
-    throw new Error(`Invalid server configuration: ${z.prettifyError(result.error)}`);
+    const issues = result.error.issues.map((issue) => ({
+      field: issue.path.join("."),
+      code: issue.code,
+    }));
+    console.error("Invalid server configuration", { issues });
+    throw new Error(
+      `Invalid server configuration: ${issues.map(({ field, code }) => `${field} (${code})`).join(", ")}`,
+    );
   }
   cached = result.data;
   return cached;
@@ -82,6 +91,10 @@ export function appleSignInConfigured(): boolean {
     process.env.APPLE_REDIRECT_URI,
   ];
   return values.every((value) => Boolean(value?.trim()));
+}
+
+export function photosEnabled(): boolean {
+  return getEnv().PHOTO_STORAGE !== "disabled";
 }
 
 export function entraSignInConfigured(): boolean {

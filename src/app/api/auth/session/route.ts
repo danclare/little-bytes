@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { jsonError } from "@/lib/http";
-import { appleSignInConfigured, entraSignInConfigured } from "@/lib/env";
+import { appleSignInConfigured, entraSignInConfigured, photosEnabled } from "@/lib/env";
 import { normalizeRole } from "@/lib/roles";
 
 export async function GET() {
@@ -40,12 +40,13 @@ export async function GET() {
             role: normalizeRole(membership.role),
             children: membership.family.children.map(({ photoObjectKey, ...child }) => ({
               ...child,
-              hasPhoto: Boolean(photoObjectKey),
+              hasPhoto: photosEnabled() && Boolean(photoObjectKey),
             })),
           }
         : null,
       appleSignInConfigured: appleSignInConfigured(),
       entraSignInConfigured: entraSignInConfigured(),
+      photosEnabled: photosEnabled(),
     });
   } catch (error) {
     return jsonError(error);
